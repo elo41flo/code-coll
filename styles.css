@@ -1,0 +1,92 @@
+nav {
+  display: flex;
+}
+
+.logo {
+  height: 150px;
+  width: 150px;
+}
+
+h1 {
+  font-size: 54px;
+  font-family: "Courier New", Courier, monospace;
+  color: #ffffff;
+  margin-right: 760px;
+}
+
+button {
+  font-size: 20px;
+  font-family: "Courier New", Courier, monospace;
+  color: #ffffff;
+  font-weight: 600;
+  padding: 8px 32px;
+  border: none;
+  border-radius: 15px;
+  cursor: pointer;
+  height: 50px;
+  width: auto;
+  margin-top: 30px;
+}
+
+.execute,
+.invite,
+.parametre {
+  background-color: #ffffff00;
+  border: none;
+}
+
+.execute {
+  background-color: #1db147;
+}
+
+.invite {
+  background-color: #039eff;
+}
+
+header {
+  background-color: #1c237265;
+}
+
+h2 {
+  font-family: "Courier New", Courier, monospace;
+  color: #ffffff;
+  font-size: 30px;
+  font-weight: 400;
+}
+
+.aligne {
+  display: flex;
+  flex-direction: row;
+}
+
+.explorateur {
+  background-color: #1c2372;
+}
+
+.dossier {
+  background-color: #039eff;
+}
+
+/* Style des dossiers pliables */
+#file-tree details {
+  margin-left: 5px;
+}
+
+#file-tree summary {
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #60a5fa; /* Bleu léger */
+  font-weight: 600;
+  user-select: none;
+  list-style: none; /* Enlève la flèche noire moche par défaut */
+}
+
+#file-tree summary:hover {
+  background-color: #333333;
+}
+
+/* Optionnel : changer l'icône quand c'est ouvert/fermé */
+#file-tree details[open] > summary {
+  color: #93c5fd;
+}
