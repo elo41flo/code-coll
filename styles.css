@@ -39,7 +39,7 @@ button {
   background-color: #1db147;
 }
 
-.invite {
+.btn-primary {
   background-color: #039eff;
 }
 
@@ -67,26 +67,73 @@ h2 {
   background-color: #039eff;
 }
 
-/* Style des dossiers pliables */
-#file-tree details {
-  margin-left: 5px;
+/* --- Style de base de l'explorateur (rappel) --- */
+#file-tree ul {
+  list-style: none; /* Supprime les points par défaut sur toutes les listes */
+  padding-left: 0; /* On gère l'indentation nous-mêmes */
+  margin: 0;
 }
 
-#file-tree summary {
-  cursor: pointer;
+#file-tree li {
   padding: 3px 6px;
   border-radius: 4px;
-  color: #60a5fa; /* Bleu léger */
+  font-size: 14px;
+  user-select: none; /* Empêche la sélection de texte au double-clic */
+}
+
+#file-tree li:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Surbrillance au survol */
+}
+
+/* Style spécifique pour les fichiers */
+.tree-file {
+  color: #cccccc;
+  cursor: pointer;
+  padding-left: 24px; /* Alignement avec les dossiers (flèche + icône) */
+  list-style: none; /* Force la suppression de puce si jamais */
+}
+
+/* --- Style des flèches pour les dossiers pliables (<details>) --- */
+
+/* 1. Masquer l'indicateur par défaut du navigateur */
+#file-tree summary::-webkit-details-marker, /* Safari */
+#file-tree summary {
+  display: flex; /* Utilise Flexbox pour aligner flèche et texte */
+  align-items: center;
+  list-style: none; /* Standard pour masquer l'indicateur */
+  cursor: pointer;
+  outline: none; /* Enlève la bordure au focus */
+  color: #60a5fa; /* Couleur de base des dossiers */
   font-weight: 600;
-  user-select: none;
-  list-style: none; /* Enlève la flèche noire moche par défaut */
+  padding: 3px 6px;
+  border-radius: 4px;
 }
 
 #file-tree summary:hover {
-  background-color: #333333;
+  background-color: rgba(96, 165, 250, 0.2); /* Surbrillance au survol */
 }
 
-/* Optionnel : changer l'icône quand c'est ouvert/fermé */
+/* 2. Insérer notre flèche avant le texte avec un pseudo-élément ::before */
+#file-tree summary::before {
+  content: "▶"; /* Caractère Unicode de la flèche fermée */
+  display: inline-block;
+  font-size: 10px;
+  margin-right: 8px; /* Espace entre la flèche et l'icône/texte */
+  width: 10px; /* Taille fixe pour l'alignement */
+  transition: transform 0.2s ease; /* Animation douce de la rotation */
+}
+
+/* 3. Animer la flèche quand le dossier est ouvert ([open]) */
+#file-tree details[open] > summary::before {
+  transform: rotate(90deg); /* Rotation de 90° vers le bas */
+}
+
+/* 4. Indenter le contenu du dossier ouvert */
+#file-tree details > ul {
+  padding-left: 24px; /* Indentation pour les sous-éléments */
+}
+
+/* 5. Gérer la couleur quand le dossier est ouvert */
 #file-tree details[open] > summary {
-  color: #93c5fd;
+  color: #93c5fd; /* Couleur plus claire quand ouvert */
 }
