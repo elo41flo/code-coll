@@ -17,7 +17,25 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 
 // ==========================================
-// 2. CONFIGURATION DE L'IDENTITÉ UTILISATEUR
+// 2. CONFIGURATION DE L'URL BACKEND (.ENV)
+// ==========================================
+
+// Extraction de l'URL du backend depuis le fichier .env (Vite)
+// Fallback automatique sur l'origine du navigateur si la variable n'est pas définie
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL ||
+  `${window.location.protocol}//${window.location.host}`;
+
+// Conversion automatique du protocole HTTP -> WS et HTTPS -> WSS
+const wsProtocol = BACKEND_URL.startsWith("https") ? "wss:" : "ws:";
+const backendHost = BACKEND_URL.replace(/^https?:\/\//, "");
+
+// URLs dédiées pour les WebSockets Yjs et Terminal
+const wsYjsUrl = `${wsProtocol}//${backendHost}/yjs`;
+const wsTerminalUrl = `${wsProtocol}//${backendHost}/terminal`;
+
+// ==========================================
+// 3. CONFIGURATION DE L'IDENTITÉ UTILISATEUR
 // ==========================================
 
 const USER_COLORS = [
@@ -57,7 +75,7 @@ function getLocalUserInfo() {
 const localUser = getLocalUserInfo();
 
 // ==========================================
-// 3. SALLE (ROOM) & SERVEUR WEBSOCKET YJS
+// 4. SALLE (ROOM) & SERVEUR WEBSOCKET YJS
 // ==========================================
 
 function getRoomId() {
@@ -73,11 +91,6 @@ function getRoomId() {
 }
 
 const currentRoom = getRoomId();
-
-// Déduction de l'URL du serveur backend (ws:// en local, wss:// en HTTPS)
-const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsHost = window.location.host; // Récupère hôte:port (ex: localhost:3000)
-const wsYjsUrl = `${protocol}//${wsHost}/yjs`;
 
 const ydoc = new Y.Doc();
 const provider = new WebsocketProvider(wsYjsUrl, currentRoom, ydoc);
@@ -106,7 +119,7 @@ const view = new EditorView({
 });
 
 // ==========================================
-// 4. BOUTON PARTAGER (COPIE DU LIEN)
+// 5. BOUTON PARTAGER (COPIE DU LIEN)
 // ==========================================
 
 const btnShare = document.getElementById("btn-share");
@@ -146,16 +159,16 @@ if (btnShare) {
 }
 
 // ==========================================
-// 5. EXPLORATION DE FICHIERS DEPUIS LE SERVEUR
+// 6. EXPLORATION DE FICHIERS DEPUIS LE SERVEUR
 // ==========================================
 
 const btnOpenFolder = document.getElementById("btn-open-folder");
 const fileTreeContainer = document.getElementById("file-tree");
 
-// Charger l'arborescence depuis le serveur au démarrage
+// Charger l'arborescence depuis le serveur backend
 async function chargerArborescenceServeur() {
   try {
-    const response = await fetch("/api/files");
+    const response = await fetch(`${BACKEND_URL}/api/files`);
     if (!response.ok) throw new Error("Erreur de récupération de l'arbre.");
 
     const treeData = await response.json();
@@ -176,10 +189,10 @@ if (btnOpenFolder) {
   btnOpenFolder.addEventListener("click", chargerArborescenceServeur);
 }
 
-// Chargement automatique dès l'ouverture de la page
+// Chargement automatique au démarrage
 chargerArborescenceServeur();
 
-// Construction HTML récursive depuis les données JSON du backend
+// Construction HTML récursive de l'arbre de fichiers
 function construireArbreHTMLBackend(nodes) {
   const ul = document.createElement("ul");
   ul.className = "tree-list";
@@ -249,27 +262,26 @@ function mettreAJourPastille(filePath, isDirty) {
   }
 }
 
-// Chargement du fichier depuis l'API backend et association à Yjs
+// Chargement du contenu du fichier depuis l'API backend
 async function basculerVersFichierServeur(filePath) {
-  // 1. Sauvegarder l'état CodeMirror du fichier qu'on quitte
+  // 1. Sauvegarder l'état actuel
   if (currentFilePath && openFiles.has(currentFilePath)) {
     openFiles.get(currentFilePath).state = view.state;
   }
 
   currentFilePath = filePath;
 
-  // 2. Si première fois qu'on l'ouvre dans cette session front
+  // 2. Si première ouverture dans cette session
   if (!openFiles.has(filePath)) {
-    // Lecture du contenu depuis le serveur backend
     const res = await fetch(
-      `/api/file-content?path=${encodeURIComponent(filePath)}`,
+      `${BACKEND_URL}/api/file-content?path=${encodeURIComponent(filePath)}`,
     );
     const data = await res.json();
     const diskContent = data.content || "";
 
     const fileYText = ydoc.getText(`file:${filePath}`);
 
-    // Si la structure Yjs pour ce fichier n'existe pas encore, on l'initialise
+    // Initialisation Yjs si vide
     if (fileYText.toString() === "" && diskContent !== "") {
       ydoc.transact(() => {
         fileYText.insert(0, diskContent);
@@ -315,14 +327,14 @@ async function basculerVersFichierServeur(filePath) {
     });
   }
 
-  // 3. Charger l'état CodeMirror spécifique
+  // 3. Charger l'état CodeMirror
   const session = openFiles.get(filePath);
   view.setState(session.state);
 
   mettreAJourPastille(filePath, session.isDirty);
 }
 
-// Enregistrement physique du fichier sur le serveur via Ctrl+S
+// Enregistrement physique sur le serveur via l'API REST
 async function enregistrerFichierServeur() {
   if (!currentFilePath || !openFiles.has(currentFilePath)) return;
 
@@ -331,7 +343,7 @@ async function enregistrerFichierServeur() {
   try {
     const contentToSave = view.state.doc.toString();
 
-    const response = await fetch("/api/save-file", {
+    const response = await fetch(`${BACKEND_URL}/api/save-file`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -352,7 +364,7 @@ async function enregistrerFichierServeur() {
   }
 }
 
-// Interception Ctrl+S / Cmd+S
+// Interception globale de Ctrl+S / Cmd+S
 window.addEventListener(
   "keydown",
   (e) => {
@@ -366,7 +378,7 @@ window.addEventListener(
 );
 
 // ==========================================
-// 6. TERMINAL XTERM.JS EN DIRECT DU SERVEUR
+// 7. TERMINAL XTERM.JS VIA WEBSOCKET BACKEND
 // ==========================================
 
 const term = new Terminal({
@@ -400,8 +412,7 @@ if (terminalContainer) {
 
   setTimeout(() => fitAddon.fit(), 100);
 
-  // Connexion WebSocket vers la route /terminal du serveur Node
-  const wsTerminalUrl = `${protocol}//${wsHost}/terminal`;
+  // Connexion WebSocket au terminal backend
   socket = new WebSocket(wsTerminalUrl);
 
   socket.onopen = () => {
