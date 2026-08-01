@@ -8,7 +8,9 @@ import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { keymap } from "@codemirror/view";
 
+// Imports Yjs et WebSocket Provider
 import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
 import { yCollab } from "y-codemirror.next";
 
 import { Terminal } from "@xterm/xterm";
@@ -16,17 +18,43 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
 // ==========================================
-// 2. INITIALISATION & VARIABLES GLOBALES
+// 2. GESTION DE LA SALLE (ROOM) & WEBSOCKET
 // ==========================================
 
-// Map globale pour stocker la session de chaque fichier ouvert
+// Extraction ou génération de l'ID de la salle dans l'URL
+function getRoomId() {
+  const urlParams = new URLSearchParams(window.location.search);
+  let roomId = urlParams.get("room");
+
+  if (!roomId) {
+    // Génération d'un identifiant unique si la room n'existe pas
+    roomId = "room-" + Math.random().toString(36).substring(2, 9);
+    const newUrl = `${window.location.pathname}?room=${roomId}`;
+    window.history.replaceState(null, "", newUrl);
+  }
+  return roomId;
+}
+
+const currentRoom = getRoomId();
+
+// Choix automatique du serveur WebSocket (serveur public sécurisé wss:// en prod/Vercel)
+const wsServerUrl =
+  window.location.hostname === "localhost"
+    ? "ws://localhost:1234"
+    : "wss://demos.yjs.dev";
+
+// Document Yjs racine et provider WebSocket global
+const ydoc = new Y.Doc();
+const provider = new WebsocketProvider(wsServerUrl, currentRoom, ydoc);
+
+// Map globale pour stocker les sessions de chaque fichier ouvert
 // Clé: Nom du fichier -> Valeur: { handle, originalContent, state, isDirty }
 const openFiles = new Map();
 
 let currentFileName = null;
 const editorContainer = document.getElementById("editor");
 
-// Instanciation initiale de l'éditeur CodeMirror
+// Instanciation initiale de l'éditeur CodeMirror avec message par défaut
 const view = new EditorView({
   state: EditorState.create({
     doc: "// Ouvre un dossier puis sélectionne un fichier pour commencer.",
@@ -46,15 +74,14 @@ if (btnShare) {
     const inviteUrl = window.location.href;
 
     try {
-      // 1. Essai avec l'API moderne Clipboard
+      // 1. Tentative via l'API Clipboard native
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(inviteUrl);
       } else {
-        // 2. Méthode de secours (Fallback) pour HTTPS / Vercel si l'API est restreinte
+        // 2. Méthode de secours pour environnements restreints
         const textArea = document.createElement("textarea");
         textArea.value = inviteUrl;
 
-        // Placer le textarea hors de l'écran
         textArea.style.position = "fixed";
         textArea.style.left = "-999999px";
         textArea.style.top = "-999999px";
@@ -63,12 +90,11 @@ if (btnShare) {
         textArea.focus();
         textArea.select();
 
-        // Exécution de la copie manuelle
         const successful = document.execCommand("copy");
         document.body.removeChild(textArea);
 
         if (!successful) {
-          throw new Error("Échec de execCommand copy");
+          throw new Error("Échec de la copie via execCommand");
         }
       }
 
@@ -81,7 +107,6 @@ if (btnShare) {
       }, 2000);
     } catch (err) {
       console.error("Erreur lors de la copie du lien :", err);
-      // Indiquer l'échec sur le bouton si vraiment bloqué
       btnShare.textContent = "Erreur de copie";
       setTimeout(() => {
         btnShare.textContent = "🔗 Inviter";
@@ -91,7 +116,7 @@ if (btnShare) {
 }
 
 // ==========================================
-// 4. EXPLORATEUR DE FICHIERS & GESTION DES SESSIONS
+// 4. EXPLORATEUR DE FICHIERS & SESSIONS
 // ==========================================
 
 const btnOpenFolder = document.getElementById("btn-open-folder");
@@ -106,12 +131,12 @@ if (btnOpenFolder) {
       const treeHTML = await construireArbreHTML(dirHandle);
       fileTreeContainer.appendChild(treeHTML);
     } catch (error) {
-      console.log("Selection de dossier annulee.");
+      console.log("Sélection de dossier annulée.");
     }
   });
 }
 
-// Construction récursive de l'arbre de fichiers
+// Construction récursive de l'arborescence HTML
 async function construireArbreHTML(dirHandle) {
   const ul = document.createElement("ul");
   ul.className = "tree-list";
@@ -121,7 +146,7 @@ async function construireArbreHTML(dirHandle) {
 
     if (entry.kind === "file") {
       li.className = "tree-file";
-      // data-attribute pour retrouver le DOM par le nom de fichier
+      // data-attribute pour le ciblage DOM
       li.dataset.filename = entry.name;
 
       li.innerHTML = `
@@ -129,7 +154,7 @@ async function construireArbreHTML(dirHandle) {
         <span class="dirty-badge"></span>
       `;
 
-      // Conserver l'état visuel de la pastille lors du re-rendu de l'arbre
+      // Conserver l'état de la pastille si le fichier a été modifié
       if (openFiles.has(entry.name) && openFiles.get(entry.name).isDirty) {
         li.classList.add("is-dirty");
       }
@@ -166,14 +191,14 @@ async function construireArbreHTML(dirHandle) {
   return ul;
 }
 
-// Recherche l'élément HTML actif dans le DOM
+// Retrouve l'élément HTML actif dans le DOM
 function getElementFichierDOM(fileName) {
   return document.querySelector(
     `.tree-file[data-filename="${CSS.escape(fileName)}"]`,
   );
 }
 
-// Ajoute ou retire la pastille dorée
+// Gestion de la pastille dorée (.is-dirty)
 function mettreAJourPastille(fileName, isDirty) {
   const domElement = getElementFichierDOM(fileName);
   if (domElement) {
@@ -185,49 +210,51 @@ function mettreAJourPastille(fileName, isDirty) {
   }
 }
 
-// Basculer vers un fichier sans détruire l'état en mémoire
+// Chargement et bascule de fichier avec synchronisation Yjs
 async function basculerVersFichier(fileHandle, fileName) {
-  // 1. Sauvegarder l'état actuel de CodeMirror pour le fichier qu'on quitte
+  // 1. Sauvegarder l'état CodeMirror du fichier qu'on quitte
   if (currentFileName && openFiles.has(currentFileName)) {
     openFiles.get(currentFileName).state = view.state;
   }
 
   currentFileName = fileName;
 
-  // 2. Première ouverture du fichier : créer son état propre
+  // 2. Première ouverture du fichier pendant cette session
   if (!openFiles.has(fileName)) {
     const file = await fileHandle.getFile();
     const diskContent = await file.text();
 
-    // Création d'un Y.Doc et Y.Text isolés spécifiquement pour ce fichier
-    const ydocFile = new Y.Doc();
-    const ytextFile = ydocFile.getText("codemirror");
+    // Clé Y.Text propre à ce fichier dans la room courante
+    const fileYText = ydoc.getText(`file:${fileName}`);
 
-    ydocFile.transact(() => {
-      ytextFile.insert(0, diskContent);
-    });
+    // Si la structure Yjs est vide pour ce fichier, on y insère le contenu initial du disque
+    if (fileYText.toString() === "" && diskContent !== "") {
+      ydoc.transact(() => {
+        fileYText.insert(0, diskContent);
+      });
+    }
 
-    // Écouteur de modifications pour la pastille dorée
+    // Écouteur pour la détection de modifications non sauvegardées
     const updateListener = EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         const fileData = openFiles.get(fileName);
         if (fileData) {
           const currentText = update.state.doc.toString();
-          // Comparaison directe avec le texte original lu sur le disque
+          // Comparaison directe entre l'état en mémoire et le contenu d'origine du disque
           fileData.isDirty = currentText !== fileData.originalContent;
           mettreAJourPastille(fileName, fileData.isDirty);
         }
       }
     });
 
-    // Création de l'EditorState CodeMirror dédié
+    // Création de l'EditorState CodeMirror connecté à Yjs via yCollab
     const fileState = EditorState.create({
-      doc: ytextFile.toString(),
+      doc: fileYText.toString(),
       extensions: [
         basicSetup,
         javascript(),
         oneDark,
-        yCollab(ytextFile, null),
+        yCollab(fileYText, provider.awareness),
         updateListener,
         keymap.of([
           {
@@ -249,15 +276,15 @@ async function basculerVersFichier(fileHandle, fileName) {
     });
   }
 
-  // 3. Charger l'état CodeMirror du fichier sélectionné
+  // 3. Charger l'état CodeMirror spécifique à ce fichier
   const session = openFiles.get(fileName);
   view.setState(session.state);
 
-  // 4. Forcer la mise à jour de la pastille visuelle
+  // 4. Mettre à jour la pastille visuelle dans l'explorateur
   mettreAJourPastille(fileName, session.isDirty);
 }
 
-// Enregistrement sur le disque dur au raccourci Ctrl+S
+// Enregistrement sur le disque dur via Ctrl+S / Cmd+S
 async function enregistrerFichierSilencieux() {
   if (!currentFileName || !openFiles.has(currentFileName)) return;
 
@@ -266,19 +293,19 @@ async function enregistrerFichierSilencieux() {
   try {
     const contentToSave = view.state.doc.toString();
 
-    // Écriture physique dans le fichier local
+    // Écriture physique sur le fichier local
     const writable = await session.handle.createWritable();
     await writable.write(contentToSave);
     await writable.close();
 
-    // Mise à jour de la référence : le contenu d'origine devient le texte sauvegardé
+    // Réinitialisation de l'état : l'origine devient le texte qu'on vient de sauvegarder
     session.originalContent = contentToSave;
     session.isDirty = false;
 
     // Retirer la pastille dorée
     mettreAJourPastille(currentFileName, false);
 
-    console.log(`Fichier ${currentFileName} enregistre avec succes.`);
+    console.log(`Fichier ${currentFileName} enregistré avec succès.`);
   } catch (error) {
     console.error("Erreur lors de l'enregistrement :", error);
   }
