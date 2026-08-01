@@ -15,13 +15,11 @@ import { yCollab } from "y-codemirror.next";
 
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import "@xterm/xterm/css/xterm.css";
 
 // ==========================================
 // 2. CONFIGURATION DE L'IDENTITÉ UTILISATEUR
 // ==========================================
 
-// Palette de couleurs distinctes pour les curseurs des collaborateurs
 const USER_COLORS = [
   { color: "#f38ba8", light: "#f38ba833" }, // Rose / Rouge
   { color: "#a6e3a1", light: "#a6e3a133" }, // Vert
@@ -32,12 +30,9 @@ const USER_COLORS = [
   { color: "#94e2d5", light: "#94e2d533" }, // Cyan
 ];
 
-// Génération ou récupération du nom d'utilisateur et de la couleur
 function getLocalUserInfo() {
-  // 1. Vérifier si l'utilisateur a défini un pseudo en cache local
   const savedName = localStorage.getItem("editor_username");
 
-  // 2. Détection du système d'exploitation via userAgent pour une étiquette parlante
   let osName = "Dev";
   const ua = navigator.userAgent;
   if (ua.includes("Win")) osName = "Windows User";
@@ -46,11 +41,9 @@ function getLocalUserInfo() {
   else if (ua.includes("Android")) osName = "Android User";
   else if (ua.includes("iPhone") || ua.includes("iPad")) osName = "iOS User";
 
-  // Identifiant aléatoire pour différencier deux sessions sur le même système
   const randomId = Math.floor(Math.random() * 900 + 100);
   const userName = savedName || `${osName} #${randomId}`;
 
-  // Sélection d'une couleur aléatoire
   const randomColor =
     USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 
@@ -81,30 +74,25 @@ function getRoomId() {
 
 const currentRoom = getRoomId();
 
-// Choix automatique du serveur WebSocket (serveur public sécurisé wss:// en prod/Vercel)
 const wsServerUrl =
   window.location.hostname === "localhost"
     ? "ws://localhost:1234"
     : "wss://demos.yjs.dev";
 
-// Document Yjs racine et provider WebSocket global
 const ydoc = new Y.Doc();
 const provider = new WebsocketProvider(wsServerUrl, currentRoom, ydoc);
 
-// Propagation des données utilisateur aux autres membres de la room (Awareness)
 provider.awareness.setLocalStateField("user", {
   name: localUser.name,
   color: localUser.color,
   colorLight: localUser.colorLight,
 });
 
-// Map globale pour stocker les sessions de chaque fichier ouvert
 const openFiles = new Map();
 
 let currentFileName = null;
 const editorContainer = document.getElementById("editor");
 
-// Instanciation initiale de l'éditeur CodeMirror
 const view = new EditorView({
   state: EditorState.create({
     doc: "// Ouvre un dossier puis sélectionne un fichier pour commencer.",
@@ -172,13 +160,25 @@ const fileTreeContainer = document.getElementById("file-tree");
 if (btnOpenFolder) {
   btnOpenFolder.addEventListener("click", async () => {
     try {
-      const dirHandle = await window.showDirectoryPicker();
-      fileTreeContainer.innerHTML = "";
+      // Vérification du support natif de l'API File System Access
+      if (!window.showDirectoryPicker) {
+        alert(
+          "Ton navigateur ne prend pas en compte l'ouverture de dossiers locaux (utilise Chrome, Edge ou Brave).",
+        );
+        return;
+      }
 
-      const treeHTML = await construireArbreHTML(dirHandle);
-      fileTreeContainer.appendChild(treeHTML);
+      const dirHandle = await window.showDirectoryPicker();
+
+      if (fileTreeContainer) {
+        fileTreeContainer.innerHTML = "";
+        const treeHTML = await construireArbreHTML(dirHandle);
+        fileTreeContainer.appendChild(treeHTML);
+      }
     } catch (error) {
-      console.log("Sélection de dossier annulée.");
+      if (error.name !== "AbortError") {
+        console.error("Erreur d'ouverture de dossier :", error);
+      }
     }
   });
 }
