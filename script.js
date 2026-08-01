@@ -36,28 +36,57 @@ const view = new EditorView({
 });
 
 // ==========================================
-// 3. BOUTON D'INVITATION (COPIE DU LIEN)
+// 3. BOUTON PARTAGER (COPIE DU LIEN)
 // ==========================================
 
 const btnShare = document.getElementById("btn-share");
 
 if (btnShare) {
-  btnShare.addEventListener("click", () => {
+  btnShare.addEventListener("click", async () => {
     const inviteUrl = window.location.href;
 
-    navigator.clipboard
-      .writeText(inviteUrl)
-      .then(() => {
-        const originalText = btnShare.textContent;
-        btnShare.textContent = "Lien copie !";
+    try {
+      // 1. Essai avec l'API moderne Clipboard
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(inviteUrl);
+      } else {
+        // 2. Méthode de secours (Fallback) pour HTTPS / Vercel si l'API est restreinte
+        const textArea = document.createElement("textarea");
+        textArea.value = inviteUrl;
 
-        setTimeout(() => {
-          btnShare.textContent = originalText;
-        }, 2000);
-      })
-      .catch((err) => {
-        console.error("Erreur copie lien :", err);
-      });
+        // Placer le textarea hors de l'écran
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+
+        textArea.focus();
+        textArea.select();
+
+        // Exécution de la copie manuelle
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+
+        if (!successful) {
+          throw new Error("Échec de execCommand copy");
+        }
+      }
+
+      // Feedback visuel du bouton
+      const originalText = btnShare.textContent;
+      btnShare.textContent = "Lien copie !";
+
+      setTimeout(() => {
+        btnShare.textContent = originalText;
+      }, 2000);
+    } catch (err) {
+      console.error("Erreur lors de la copie du lien :", err);
+      // Indiquer l'échec sur le bouton si vraiment bloqué
+      btnShare.textContent = "Erreur de copie";
+      setTimeout(() => {
+        btnShare.textContent = "🔗 Inviter";
+      }, 2000);
+    }
   });
 }
 
