@@ -20,11 +20,13 @@ import { FitAddon } from "@xterm/addon-fit";
 // 2. CONFIGURATION DE L'URL BACKEND (.ENV)
 // ==========================================
 
-// Extraction de l'URL du backend depuis le fichier .env (Vite)
-// Fallback automatique sur l'origine du navigateur si la variable n'est pas définie
-const BACKEND_URL =
+// Extraction et nettoyage de l'URL du backend depuis .env (Vite)
+const rawBackendUrl =
   import.meta.env.VITE_BACKEND_URL ||
   `${window.location.protocol}//${window.location.host}`;
+
+// Retirer le slash final éventuel pour éviter des requêtes malformées (ex: //api/files)
+const BACKEND_URL = rawBackendUrl.replace(/\/+$/, "");
 
 // Conversion automatique du protocole HTTP -> WS et HTTPS -> WSS
 const wsProtocol = BACKEND_URL.startsWith("https") ? "wss:" : "ws:";
@@ -164,29 +166,47 @@ if (btnShare) {
 
 const btnOpenFolder = document.getElementById("btn-open-folder");
 const fileTreeContainer = document.getElementById("file-tree");
+const sidebar = document.getElementById("sidebar");
 
 // Charger l'arborescence depuis le serveur backend
 async function chargerArborescenceServeur() {
   try {
     const response = await fetch(`${BACKEND_URL}/api/files`);
-    if (!response.ok) throw new Error("Erreur de récupération de l'arbre.");
+    if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
 
     const treeData = await response.json();
 
     if (fileTreeContainer) {
       fileTreeContainer.innerHTML = "";
-      const treeHTML = construireArbreHTMLBackend(treeData);
-      fileTreeContainer.appendChild(treeHTML);
+      if (Array.isArray(treeData) && treeData.length > 0) {
+        const treeHTML = construireArbreHTMLBackend(treeData);
+        fileTreeContainer.appendChild(treeHTML);
+      } else {
+        fileTreeContainer.innerHTML =
+          "<div class='tree-empty'>Aucun fichier dans le dossier.</div>";
+      }
     }
   } catch (err) {
     console.error("Impossible de charger l'explorateur :", err);
+    if (fileTreeContainer) {
+      fileTreeContainer.innerHTML =
+        "<div class='tree-error'>Échec de connexion au serveur.</div>";
+    }
   }
 }
 
-// Bouton rafraîchir / ouvrir dossier
+// Gestion de l'ouverture et du chargement lors du clic sur le bouton
 if (btnOpenFolder) {
   btnOpenFolder.textContent = "📁 Projet serveur";
-  btnOpenFolder.addEventListener("click", chargerArborescenceServeur);
+  btnOpenFolder.addEventListener("click", () => {
+    // Basculer l'affichage du panneau latéral si la classe existe
+    if (sidebar) {
+      sidebar.classList.toggle("open");
+      sidebar.classList.toggle("active");
+    }
+    // Recharger l'arborescence
+    chargerArborescenceServeur();
+  });
 }
 
 // Chargement automatique au démarrage
@@ -205,12 +225,16 @@ function construireArbreHTMLBackend(nodes) {
       li.dataset.filepath = node.path;
 
       li.innerHTML = `
-        <span class="file-name">${node.name}</span>
+        <span class="file-name">📄 ${node.name}</span>
         <span class="dirty-badge"></span>
       `;
 
       if (openFiles.has(node.path) && openFiles.get(node.path).isDirty) {
         li.classList.add("is-dirty");
+      }
+
+      if (currentFilePath === node.path) {
+        li.classList.add("active-file");
       }
 
       li.addEventListener("click", async (e) => {
@@ -227,9 +251,10 @@ function construireArbreHTMLBackend(nodes) {
       ul.appendChild(li);
     } else if (node.type === "directory") {
       const details = document.createElement("details");
+      details.open = true; // Ouvert par défaut
       const summary = document.createElement("summary");
 
-      summary.textContent = node.name;
+      summary.textContent = `📁 ${node.name}`;
       summary.className = "tree-folder-title";
 
       const subTree = construireArbreHTMLBackend(node.children || []);
@@ -264,7 +289,7 @@ function mettreAJourPastille(filePath, isDirty) {
 
 // Chargement du contenu du fichier depuis l'API backend
 async function basculerVersFichierServeur(filePath) {
-  // 1. Sauvegarder l'état actuel
+  // 1. Sauvegarder l'état du fichier courant
   if (currentFilePath && openFiles.has(currentFilePath)) {
     openFiles.get(currentFilePath).state = view.state;
   }
@@ -273,65 +298,73 @@ async function basculerVersFichierServeur(filePath) {
 
   // 2. Si première ouverture dans cette session
   if (!openFiles.has(filePath)) {
-    const res = await fetch(
-      `${BACKEND_URL}/api/file-content?path=${encodeURIComponent(filePath)}`,
-    );
-    const data = await res.json();
-    const diskContent = data.content || "";
+    try {
+      const res = await fetch(
+        `${BACKEND_URL}/api/file-content?path=${encodeURIComponent(filePath)}`,
+      );
+      if (!res.ok) throw new Error("Erreur lors de la lecture du fichier.");
 
-    const fileYText = ydoc.getText(`file:${filePath}`);
+      const data = await res.json();
+      const diskContent = data.content || "";
 
-    // Initialisation Yjs si vide
-    if (fileYText.toString() === "" && diskContent !== "") {
-      ydoc.transact(() => {
-        fileYText.insert(0, diskContent);
-      });
-    }
+      const fileYText = ydoc.getText(`file:${filePath}`);
 
-    const updateListener = EditorView.updateListener.of((update) => {
-      if (update.docChanged) {
-        const fileData = openFiles.get(filePath);
-        if (fileData) {
-          const currentText = update.state.doc.toString();
-          fileData.isDirty = currentText !== fileData.originalContent;
-          mettreAJourPastille(filePath, fileData.isDirty);
-        }
+      // Initialisation Yjs si le document partagé est vide
+      if (fileYText.toString() === "" && diskContent !== "") {
+        ydoc.transact(() => {
+          fileYText.insert(0, diskContent);
+        });
       }
-    });
 
-    const fileState = EditorState.create({
-      doc: fileYText.toString(),
-      extensions: [
-        basicSetup,
-        javascript(),
-        oneDark,
-        yCollab(fileYText, provider.awareness),
-        updateListener,
-        keymap.of([
-          {
-            key: "Mod-s",
-            run: () => {
-              enregistrerFichierServeur();
-              return true;
+      const updateListener = EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          const fileData = openFiles.get(filePath);
+          if (fileData) {
+            const currentText = update.state.doc.toString();
+            fileData.isDirty = currentText !== fileData.originalContent;
+            mettreAJourPastille(filePath, fileData.isDirty);
+          }
+        }
+      });
+
+      const fileState = EditorState.create({
+        doc: fileYText.toString(),
+        extensions: [
+          basicSetup,
+          javascript(),
+          oneDark,
+          yCollab(fileYText, provider.awareness),
+          updateListener,
+          keymap.of([
+            {
+              key: "Mod-s",
+              run: () => {
+                enregistrerFichierServeur();
+                return true;
+              },
             },
-          },
-        ]),
-      ],
-    });
+          ]),
+        ],
+      });
 
-    openFiles.set(filePath, {
-      path: filePath,
-      originalContent: diskContent,
-      state: fileState,
-      isDirty: false,
-    });
+      openFiles.set(filePath, {
+        path: filePath,
+        originalContent: diskContent,
+        state: fileState,
+        isDirty: false,
+      });
+    } catch (err) {
+      console.error("Erreur de basculement vers le fichier :", err);
+      return;
+    }
   }
 
   // 3. Charger l'état CodeMirror
   const session = openFiles.get(filePath);
-  view.setState(session.state);
-
-  mettreAJourPastille(filePath, session.isDirty);
+  if (session) {
+    view.setState(session.state);
+    mettreAJourPastille(filePath, session.isDirty);
+  }
 }
 
 // Enregistrement physique sur le serveur via l'API REST
@@ -358,7 +391,9 @@ async function enregistrerFichierServeur() {
     session.isDirty = false;
 
     mettreAJourPastille(currentFilePath, false);
-    console.log(`Fichier ${currentFilePath} sauvegardé sur le serveur.`);
+    console.log(
+      `Fichier ${currentFilePath} sauvegardé avec succès sur le serveur.`,
+    );
   } catch (error) {
     console.error("Erreur enregistrement serveur :", error);
   }
@@ -410,22 +445,28 @@ let socket = null;
 if (terminalContainer) {
   term.open(terminalContainer);
 
-  setTimeout(() => fitAddon.fit(), 100);
+  setTimeout(() => {
+    try {
+      fitAddon.fit();
+    } catch (e) {}
+  }, 100);
 
   // Connexion WebSocket au terminal backend
   socket = new WebSocket(wsTerminalUrl);
 
   socket.onopen = () => {
-    fitAddon.fit();
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(
-        JSON.stringify({
-          type: "resize",
-          cols: term.cols,
-          rows: term.rows,
-        }),
-      );
-    }
+    try {
+      fitAddon.fit();
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(
+          JSON.stringify({
+            type: "resize",
+            cols: term.cols,
+            rows: term.rows,
+          }),
+        );
+      }
+    } catch (e) {}
   };
 
   socket.onmessage = (event) => term.write(event.data);
