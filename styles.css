@@ -1,139 +1,301 @@
-nav {
-  display: flex;
+/* --- RESET & VARIABLES GOBLALES --- */
+:root {
+  --bg-darker: #1e1e2e;
+  --bg-dark: #252538;
+  --bg-sidebar: #181825;
+  --border-color: #313244;
+  --text-main: #cdd6f4;
+  --text-muted: #a6adc8;
+  --accent-blue: #89b4fa;
+  --accent-blue-hover: #b4befe;
+  --accent-green: #a6e3a1;
+  --accent-green-hover: #94e2d5;
 }
 
-.logo {
-  height: 150px;
-  width: 150px;
-}
-
-h1 {
-  font-size: 54px;
-  font-family: "Courier New", Courier, monospace;
-  color: #ffffff;
-  margin-right: 760px;
-}
-
-button {
-  font-size: 20px;
-  font-family: "Courier New", Courier, monospace;
-  color: #ffffff;
-  font-weight: 600;
-  padding: 8px 32px;
-  border: none;
-  border-radius: 15px;
-  cursor: pointer;
-  height: 50px;
-  width: auto;
-  margin-top: 30px;
-}
-
-.execute,
-.invite,
-.parametre {
-  background-color: #ffffff00;
-  border: none;
-}
-
-.execute {
-  background-color: #1db147;
-}
-
-.btn-primary {
-  background-color: #039eff;
-}
-
-header {
-  background-color: #1c237265;
-}
-
-h2 {
-  font-family: "Courier New", Courier, monospace;
-  color: #ffffff;
-  font-size: 30px;
-  font-weight: 400;
-}
-
-.aligne {
-  display: flex;
-  flex-direction: row;
-}
-
-.explorateur {
-  background-color: #1c2372;
-}
-
-.dossier {
-  background-color: #039eff;
-}
-
-/* --- Style de base de l'explorateur (rappel) --- */
-#file-tree ul {
-  list-style: none; /* Supprime les points par défaut sur toutes les listes */
-  padding-left: 0; /* On gère l'indentation nous-mêmes */
+* {
+  box-sizing: border-box;
   margin: 0;
+  padding: 0;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+body {
+  background-color: var(--bg-darker);
+  color: var(--text-main);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* --- HEADER / NAVBAR --- */
+header {
+  height: 55px;
+  background-color: var(--bg-dark);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--accent-blue);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* --- BOUTONS --- */
+button {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-execute {
+  background-color: var(--accent-green);
+  color: #11111b;
+}
+
+.btn-execute:hover {
+  background-color: var(--accent-green-hover);
+}
+
+.btn-invite {
+  background-color: var(--accent-blue);
+  color: #11111b;
+}
+
+.btn-invite:hover {
+  background-color: var(--accent-blue-hover);
+}
+
+.btn-settings {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 8px;
+  font-size: 1.1rem;
+}
+
+.btn-settings:hover {
+  color: var(--text-main);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* --- LAYOUT PRINCIPAL (EXPLORATEUR + ÉDITEUR) --- */
+.main-container {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 55px);
+  overflow: hidden;
+}
+
+/* --- SIDEBAR EXPLORATEUR --- */
+#sidebar {
+  width: 260px;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 15px;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.sidebar-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.btn-open-folder {
+  width: 100%;
+  background-color: rgba(137, 180, 250, 0.1);
+  color: var(--accent-blue);
+  border: 1px dashed var(--accent-blue);
+  justify-content: center;
+  margin-bottom: 15px;
+}
+
+.btn-open-folder:hover {
+  background-color: rgba(137, 180, 250, 0.2);
+}
+
+/* --- ARBORESCENCE DE FICHIERS --- */
+#file-tree {
+  flex: 1;
+  overflow-y: auto;
+}
+
+#file-tree ul {
+  list-style: none;
+  padding-left: 0;
 }
 
 #file-tree li {
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 14px;
-  user-select: none; /* Empêche la sélection de texte au double-clic */
+  font-size: 0.88rem;
+  user-select: none;
 }
 
-#file-tree li:hover {
-  background-color: rgba(255, 255, 255, 0.1); /* Surbrillance au survol */
-}
-
-/* Style spécifique pour les fichiers */
 .tree-file {
-  color: #cccccc;
-  cursor: pointer;
-  padding-left: 24px; /* Alignement avec les dossiers (flèche + icône) */
-  list-style: none; /* Force la suppression de puce si jamais */
-}
-
-/* --- Style des flèches pour les dossiers pliables (<details>) --- */
-
-/* 1. Masquer l'indicateur par défaut du navigateur */
-#file-tree summary::-webkit-details-marker, /* Safari */
-#file-tree summary {
-  display: flex; /* Utilise Flexbox pour aligner flèche et texte */
-  align-items: center;
-  list-style: none; /* Standard pour masquer l'indicateur */
-  cursor: pointer;
-  outline: none; /* Enlève la bordure au focus */
-  color: #60a5fa; /* Couleur de base des dossiers */
-  font-weight: 600;
-  padding: 3px 6px;
+  padding: 6px 10px 6px 24px;
+  color: var(--text-main);
   border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
-#file-tree summary:hover {
-  background-color: rgba(96, 165, 250, 0.2); /* Surbrillance au survol */
+.tree-file:hover {
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
-/* 2. Insérer notre flèche avant le texte avec un pseudo-élément ::before */
+#file-tree summary {
+  padding: 6px 10px;
+  color: var(--accent-blue);
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  list-style: none;
+}
+
+#file-tree summary::-webkit-details-marker {
+  display: none;
+}
+
 #file-tree summary::before {
-  content: "▶"; /* Caractère Unicode de la flèche fermée */
-  display: inline-block;
-  font-size: 10px;
-  margin-right: 8px; /* Espace entre la flèche et l'icône/texte */
-  width: 10px; /* Taille fixe pour l'alignement */
-  transition: transform 0.2s ease; /* Animation douce de la rotation */
+  content: "▶";
+  font-size: 0.65rem;
+  margin-right: 8px;
+  transition: transform 0.2s ease;
 }
 
-/* 3. Animer la flèche quand le dossier est ouvert ([open]) */
 #file-tree details[open] > summary::before {
-  transform: rotate(90deg); /* Rotation de 90° vers le bas */
+  transform: rotate(90deg);
 }
 
-/* 4. Indenter le contenu du dossier ouvert */
 #file-tree details > ul {
-  padding-left: 24px; /* Indentation pour les sous-éléments */
+  padding-left: 14px;
 }
 
-/* 5. Gérer la couleur quand le dossier est ouvert */
-#file-tree details[open] > summary {
-  color: #93c5fd; /* Couleur plus claire quand ouvert */
+/* --- ZONE D'ÉDITION DE CODE --- */
+#editor-container {
+  flex: 1;
+  height: 100%;
+  background-color: var(--bg-darker);
+  position: relative;
+}
+
+/* Forcer CodeMirror à prendre tout l'espace vertical */
+.cm-editor {
+  height: 100% !important;
+}
+
+.cm-scroller {
+  overflow: auto;
+  font-family: "Fira Code", "Cascadia Code", Consolas, monospace;
+}
+
+@import "@xterm/xterm/css/xterm.css";
+
+/* Panneau inférieur */
+#bottom-panel {
+  height: 200px;
+  background-color: #11111b;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  height: 30px;
+  background-color: var(--bg-sidebar);
+  padding: 0 15px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Zone Xterm */
+#terminal-container {
+  flex: 1;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* ==========================================
+   EXPLORATEUR DE FICHIERS ET PASTILLE
+   ========================================== */
+
+/* Structure de chaque ligne de fichier dans l'explorateur */
+.tree-list .tree-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Pastille d'état (masquée par défaut) */
+.tree-list .tree-file .dirty-badge {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: transparent;
+  margin-left: 8px;
+  flex-shrink: 0;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+/* Affichage de la pastille dorée lorsque le fichier contient des modifications non enregistrées */
+.tree-list .tree-file.is-dirty .dirty-badge {
+  background-color: #f9e2af;
+  box-shadow: 0 0 6px rgba(249, 226, 175, 0.8);
+}
+
+/* Surlignage du fichier actuellement ouvert */
+.tree-list .tree-file.active-file {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
 }
