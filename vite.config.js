@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import path from "path";
 
 export default defineConfig({
   define: {
@@ -6,8 +7,12 @@ export default defineConfig({
     global: "window",
   },
   build: {
-    // Empêche Vite de bundler les scripts backend et les modules natifs
     rollupOptions: {
+      // Forcer Vite à ne compiler QUE l'index.html frontend
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+      },
+      // Ignorer les modules Node si un package les appelle indirectement
       external: ["node-pty", "os", "path", "fs", "child_process"],
     },
   },
