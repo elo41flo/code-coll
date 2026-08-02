@@ -2,20 +2,13 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   define: {
-    // Injection globale pour éviter tout ReferenceError dans le navigateur
     "process.env": {},
-    process: { env: {} },
+    global: "window",
   },
   build: {
+    // Empêche Vite de bundler les scripts backend et les modules natifs
     rollupOptions: {
-      // Indique au bundler d'ignorer totalement node-pty s'il est résolu indirectement
-      external: ["node-pty"],
-    },
-  },
-  server: {
-    hmr: false,
-    watch: {
-      ignored: ["**/*"],
+      external: ["node-pty", "os", "path", "fs", "child_process"],
     },
   },
 });
