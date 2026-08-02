@@ -9,15 +9,14 @@
     "@xterm/xterm": "^6.0.0",
     "codemirror": "^6.0.2",
     "idb-keyval": "^6.3.0",
-    "node-pty": "^1.1.0",
-    "ws": "^8.21.1",
     "y-codemirror.next": "^0.3.5",
     "y-websocket": "^1.5.4",
     "yjs": "^13.6.31"
   },
   "scripts": {
-    "server": "node server.js",
-    "dev": "vite"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
     "vite": "^8.2.0"
