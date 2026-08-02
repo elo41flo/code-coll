@@ -1,23 +1,30 @@
 import http from "http";
 import { WebSocketServer } from "ws";
-import { setupWSConnection } from "y-websocket/bin/utils";
+import pkg from "y-websocket/bin/utils";
 
-// 1. Création d'un serveur HTTP basique
+// Extraction sécurisée de la fonction depuis le package CommonJS
+const { setupWSConnection } = pkg;
+
+// 1. Création du serveur HTTP
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("Le serveur WebSocket Yjs est actif !");
+  res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("🚀 Le serveur WebSocket Yjs est actif !");
 });
 
-// 2. Attachement du serveur WebSocket
+// 2. Attachement de WebSocketServer au serveur HTTP
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (conn, req) => {
-  // y-websocket gère les rooms automatiquement via l'URL
+  // Gestion d'erreur individuelle sur la socket pour éviter les crashs silencieux
+  conn.on("error", (err) => console.error("Erreur WebSocket :", err));
+
+  // y-websocket extrait automatiquement le nom de la room depuis l'URL de connexion
   setupWSConnection(conn, req);
 });
 
-// 3. Lancement du serveur sur le port 1234
-const PORT = 1234;
+// 3. Écoute sur le port d'environnement (Plesk/Passenger) ou 1234 en local
+const PORT = process.env.PORT || 1234;
+
 server.listen(PORT, () => {
-  console.log(`🚀 Serveur Yjs prêt et à l'écoute sur ws://localhost:${PORT}`);
+  console.log(`🚀 Serveur Yjs prêt et à l'écoute sur le port ${PORT}`);
 });
