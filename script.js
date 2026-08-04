@@ -212,12 +212,10 @@ if (btnOpenFolder) {
 // Chargement automatique au démarrage
 chargerArborescenceServeur();
 
-// Construction HTML récursive de l'arbre de fichiers
 function construireArbreHTMLBackend(nodes) {
   const ul = document.createElement("ul");
   ul.className = "tree-list";
 
-  // Sécurité si nodes n'est pas un tableau
   if (!Array.isArray(nodes)) return ul;
 
   nodes.forEach((node) => {
@@ -254,13 +252,12 @@ function construireArbreHTMLBackend(nodes) {
       ul.appendChild(li);
     } else if (node.type === "directory") {
       const details = document.createElement("details");
-      details.open = true; // Ouvert par défaut
+      details.open = true;
       const summary = document.createElement("summary");
 
       summary.textContent = `📁 ${node.name}`;
       summary.className = "tree-folder-title";
 
-      // Sécurité : passage d'un tableau vide si node.children est indéfini
       const childrenNodes = Array.isArray(node.children) ? node.children : [];
       const subTree = construireArbreHTMLBackend(childrenNodes);
 
