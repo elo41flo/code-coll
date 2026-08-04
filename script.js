@@ -20,15 +20,19 @@ import { FitAddon } from "@xterm/addon-fit";
 // 2. CONFIGURATION DE L'URL BACKEND (.ENV)
 // ==========================================
 
+// Extraction et nettoyage de l'URL du backend depuis .env (Vite)
 const rawBackendUrl =
   import.meta.env.VITE_BACKEND_URL ||
   `${window.location.protocol}//${window.location.host}`;
 
+// Retirer le slash final éventuel pour éviter des requêtes malformées (ex: //api/files)
 const BACKEND_URL = rawBackendUrl.replace(/\/+$/, "");
 
+// Conversion automatique du protocole HTTP -> WS et HTTPS -> WSS
 const wsProtocol = BACKEND_URL.startsWith("https") ? "wss:" : "ws:";
 const backendHost = BACKEND_URL.replace(/^https?:\/\//, "");
 
+// URLs dédiées pour les WebSockets Yjs et Terminal
 const wsYjsUrl = `${wsProtocol}//${backendHost}/yjs`;
 const wsTerminalUrl = `${wsProtocol}//${backendHost}/terminal`;
 
@@ -37,13 +41,13 @@ const wsTerminalUrl = `${wsProtocol}//${backendHost}/terminal`;
 // ==========================================
 
 const USER_COLORS = [
-  { color: "#f38ba8", light: "#f38ba833" },
-  { color: "#a6e3a1", light: "#a6e3a133" },
-  { color: "#89b4fa", light: "#89b4fa33" },
-  { color: "#f9e2af", light: "#f9e2af33" },
-  { color: "#cba6f7", light: "#cba6f733" },
-  { color: "#fab387", light: "#fab38733" },
-  { color: "#94e2d5", light: "#94e2d533" },
+  { color: "#f38ba8", light: "#f38ba833" }, // Rose / Rouge
+  { color: "#a6e3a1", light: "#a6e3a133" }, // Vert
+  { color: "#89b4fa", light: "#89b4fa33" }, // Bleu
+  { color: "#f9e2af", light: "#f9e2af33" }, // Jaune
+  { color: "#cba6f7", light: "#cba6f733" }, // Violet
+  { color: "#fab387", light: "#fab38733" }, // Orange
+  { color: "#94e2d5", light: "#94e2d533" }, // Cyan
 ];
 
 function getLocalUserInfo() {
@@ -54,6 +58,8 @@ function getLocalUserInfo() {
   if (ua.includes("Win")) osName = "Windows User";
   else if (ua.includes("Mac")) osName = "Mac User";
   else if (ua.includes("Linux")) osName = "Linux User";
+  else if (ua.includes("Android")) osName = "Android User";
+  else if (ua.includes("iPhone") || ua.includes("iPad")) osName = "iOS User";
 
   const randomId = Math.floor(Math.random() * 900 + 100);
   const userName = savedName || `${osName} #${randomId}`;
@@ -91,16 +97,21 @@ const currentRoom = getRoomId();
 const ydoc = new Y.Doc();
 const provider = new WebsocketProvider(wsYjsUrl, currentRoom, ydoc);
 
+// Transmission de l'identité utilisateur à l'awareness Yjs
 provider.awareness.setLocalStateField("user", {
   name: localUser.name,
   color: localUser.color,
   colorLight: localUser.colorLight,
 });
 
+// Map globale des fichiers ouverts en mémoire
+// Clé: path du fichier -> Valeur: { path, originalContent, state, isDirty }
 const openFiles = new Map();
+
 let currentFilePath = null;
 const editorContainer = document.getElementById("editor");
 
+// Instance initiale de CodeMirror
 const view = new EditorView({
   state: EditorState.create({
     doc: "// Sélectionnez un fichier dans l'explorateur pour démarrer.",
@@ -110,14 +121,13 @@ const view = new EditorView({
 });
 
 // ==========================================
-// 5. BOUTON PARTAGER (COPIE DU LIEN D'INVITATION)
+// 5. BOUTON PARTAGER (COPIE DU LIEN)
 // ==========================================
 
 const btnShare = document.getElementById("btn-share");
 
 if (btnShare) {
   btnShare.addEventListener("click", async () => {
-    // Le lien intègre à la fois la room et le fichier actif
     const inviteUrl = window.location.href;
 
     try {
@@ -151,7 +161,7 @@ if (btnShare) {
 }
 
 // ==========================================
-// 6. EXPLORATION DE FICHIERS SERVEUR & SYNCHRONISATION
+// 6. EXPLORATION DE FICHIERS DEPUIS LE SERVEUR
 // ==========================================
 
 const btnOpenFolder = document.getElementById("btn-open-folder");
@@ -166,27 +176,21 @@ async function chargerArborescenceServeur() {
 
     const treeData = await response.json();
 
-    if (fileTreeContainer) {
-      fileTreeContainer.innerHTML = "";
-      if (Array.isArray(treeData) && treeData.length > 0) {
-        const treeHTML = construireArbreHTMLBackend(treeData);
-        fileTreeContainer.appendChild(treeHTML);
+    if (Array.isArray(treeData) && treeData.length > 0) {
+      const treeHTML = construireArbreHTMLBackend(treeData);
+      fileTreeContainer.appendChild(treeHTML);
 
-        // --- SYNCHRONISATION : Vérifier si un fichier est spécifié dans l'URL ---
-        const urlParams = new URLSearchParams(window.location.search);
-        const fileFromUrl = urlParams.get("file");
+      // --- NOUVEAU : Ouverture automatique du fichier de l'URL pour l'invité ---
+      const urlParams = new URLSearchParams(window.location.search);
+      const fileFromUrl = urlParams.get("file");
 
-        if (fileFromUrl) {
-          // L'invité ouvre automatiquement le fichier présent dans le lien
-          await basculerVersFichierServeur(fileFromUrl);
-        } else {
-          // Ouverture par défaut du premier fichier si aucun n'est dans le lien
-          const firstFile = trouverPremierFichier(treeData);
-          if (firstFile) await basculerVersFichierServeur(firstFile.path);
-        }
+      if (fileFromUrl) {
+        // Si l'URL contient un fichier, on l'ouvre directement
+        await basculerVersFichierServeur(fileFromUrl);
       } else {
-        fileTreeContainer.innerHTML =
-          "<div class='tree-empty'>Aucun fichier sur le serveur.</div>";
+        // Sinon on ouvre le 1er fichier disponible (ex: main.js)
+        const firstFile = trouverPremierFichier(treeData);
+        if (firstFile) await basculerVersFichierServeur(firstFile.path);
       }
     }
   } catch (err) {
@@ -198,19 +202,8 @@ async function chargerArborescenceServeur() {
   }
 }
 
-// Fonction utilitaire pour trouver le premier fichier
-function trouverPremierFichier(nodes) {
-  for (const node of nodes) {
-    if (node.type === "file") return node;
-    if (node.type === "directory" && node.children) {
-      const sub = trouverPremierFichier(node.children);
-      if (sub) return sub;
-    }
-  }
-  return null;
-}
-
-// Clic sur le bouton : ouvrir/fermer la sidebar + charger les fichiers
+// Gestion de l'ouverture et du chargement lors du clic sur le bouton
+// Utilisation de l'API moderne File System Access du navigateur
 if (btnOpenFolder) {
   btnOpenFolder.textContent = "📁 Projet serveur";
   btnOpenFolder.addEventListener("click", () => {
@@ -222,58 +215,50 @@ if (btnOpenFolder) {
   });
 }
 
-// Chargement automatique dès l'arrivée sur le site
-chargerArborescenceServeur();
+// Fonction utilitaire pour récupérer le premier fichier d'un dossier
+function trouverPremierFichier(nodes) {
+  for (const node of nodes) {
+    if (node.type === "file") return node;
+    if (node.type === "directory" && node.children) {
+      const sub = trouverPremierFichier(node.children);
+      if (sub) return sub;
+    }
+  }
+  return null;
+}
 
-// Rendu HTML récursif sécurisé de l'arborescence
-function construireArbreHTMLBackend(nodes) {
+// Fonction récursive pour lire un dossier local sélectionné
+async function lireDossierLocal(dirHandle) {
   const ul = document.createElement("ul");
   ul.className = "tree-list";
 
-  if (!Array.isArray(nodes)) return ul;
-
-  nodes.forEach((node) => {
+  for await (const entry of dirHandle.values()) {
     const li = document.createElement("li");
 
-    if (node.type === "file") {
+    if (entry.kind === "file") {
       li.className = "tree-file";
-      li.dataset.filepath = node.path;
-
-      li.innerHTML = `
-        <span class="file-name">📄 ${node.name}</span>
-        <span class="dirty-badge"></span>
-      `;
-
-      if (openFiles.has(node.path) && openFiles.get(node.path).isDirty) {
-        li.classList.add("is-dirty");
-      }
-
-      if (currentFilePath === node.path) {
-        li.classList.add("active-file");
-      }
+      li.innerHTML = `<span class="file-name">📄 ${entry.name}</span>`;
 
       li.addEventListener("click", async (e) => {
         e.stopPropagation();
+        const file = await entry.getFile();
+        const content = await file.text();
 
-        document.querySelectorAll(".tree-file").forEach((el) => {
-          el.classList.remove("active-file");
+        // Charger le contenu du fichier local dans CodeMirror
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: content },
         });
-        li.classList.add("active-file");
-
-        await basculerVersFichierServeur(node.path);
       });
 
       ul.appendChild(li);
-    } else if (node.type === "directory") {
+    } else if (entry.kind === "directory") {
       const details = document.createElement("details");
       details.open = true;
       const summary = document.createElement("summary");
-
-      summary.textContent = `📁 ${node.name}`;
+      summary.textContent = `📁 ${entry.name}`;
       summary.className = "tree-folder-title";
 
-      const childrenNodes = Array.isArray(node.children) ? node.children : [];
-      const subTree = construireArbreHTMLBackend(childrenNodes);
+      const subTree = await lireDossierLocal(entry);
 
       details.appendChild(summary);
       details.appendChild(subTree);
@@ -281,7 +266,7 @@ function construireArbreHTMLBackend(nodes) {
 
       ul.appendChild(li);
     }
-  });
+  }
 
   return ul;
 }
@@ -303,29 +288,22 @@ function mettreAJourPastille(filePath, isDirty) {
   }
 }
 
-// Chargement et bascule de fichier synchronisé dans l'URL
+// Chargement du contenu du fichier depuis l'API backend
 async function basculerVersFichierServeur(filePath) {
+  // 1. Sauvegarder l'état du fichier courant
   if (currentFilePath && openFiles.has(currentFilePath)) {
     openFiles.get(currentFilePath).state = view.state;
   }
 
   currentFilePath = filePath;
 
-  // --- MISE À JOUR DE L'URL : On enregistre le fichier dans la barre d'adresse ---
+  // --- NOUVEAU : Enregistrer le fichier actif dans l'URL ---
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set("file", filePath);
   const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
   window.history.replaceState(null, "", newUrl);
 
-  // Mettre à jour l'élément actif dans le DOM
-  document.querySelectorAll(".tree-file").forEach((el) => {
-    if (el.dataset.filepath === filePath) {
-      el.classList.add("active-file");
-    } else {
-      el.classList.remove("active-file");
-    }
-  });
-
+  // 2. Si première ouverture dans cette session
   if (!openFiles.has(filePath)) {
     try {
       const res = await fetch(
@@ -338,6 +316,7 @@ async function basculerVersFichierServeur(filePath) {
 
       const fileYText = ydoc.getText(`file:${filePath}`);
 
+      // Initialisation Yjs si le document partagé est vide
       if (fileYText.toString() === "" && diskContent !== "") {
         ydoc.transact(() => {
           fileYText.insert(0, diskContent);
@@ -387,6 +366,7 @@ async function basculerVersFichierServeur(filePath) {
     }
   }
 
+  // 3. Charger l'état CodeMirror
   const session = openFiles.get(filePath);
   if (session) {
     view.setState(session.state);
@@ -394,7 +374,7 @@ async function basculerVersFichierServeur(filePath) {
   }
 }
 
-// Enregistrement sur le serveur backend
+// Enregistrement physique sur le serveur via l'API REST
 async function enregistrerFichierServeur() {
   if (!currentFilePath || !openFiles.has(currentFilePath)) return;
 
@@ -418,12 +398,15 @@ async function enregistrerFichierServeur() {
     session.isDirty = false;
 
     mettreAJourPastille(currentFilePath, false);
-    console.log(`Fichier ${currentFilePath} sauvegardé avec succès.`);
+    console.log(
+      `Fichier ${currentFilePath} sauvegardé avec succès sur le serveur.`,
+    );
   } catch (error) {
     console.error("Erreur enregistrement serveur :", error);
   }
 }
 
+// Interception globale de Ctrl+S / Cmd+S
 window.addEventListener(
   "keydown",
   (e) => {
@@ -437,7 +420,7 @@ window.addEventListener(
 );
 
 // ==========================================
-// 7. TERMINAL XTERM.JS
+// 7. TERMINAL XTERM.JS VIA WEBSOCKET BACKEND
 // ==========================================
 
 const term = new Terminal({
@@ -475,6 +458,7 @@ if (terminalContainer) {
     } catch (e) {}
   }, 100);
 
+  // Connexion WebSocket au terminal backend
   socket = new WebSocket(wsTerminalUrl);
 
   socket.onopen = () => {
