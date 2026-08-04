@@ -362,3 +362,48 @@ button {
   pointer-events: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
+
+/* --- CURSEURS COLLABORATIFS EN TEMPS RÉEL --- */
+
+/* La ligne verticale représentant le curseur d'un autre utilisateur */
+.cm-ySelectionCaret {
+  position: relative;
+  border-left: 2px solid;
+  border-right: none;
+  margin-left: -1px;
+  margin-right: -1px;
+  box-sizing: border-box;
+}
+
+/* La pastille / étiquette au-dessus du curseur avec le nom de l'utilisateur */
+.cm-ySelectionInfo {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  font-size: 10px;
+  font-family: sans-serif;
+  font-weight: bold;
+  line-height: normal;
+  user-select: none;
+  color: #11111b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+
+/* Petit triangle en bas de la pastille pour pointer sur la ligne de code */
+.cm-ySelectionInfo::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 4px;
+  border-width: 4px 4px 0;
+  border-style: solid;
+  border-color: inherit transparent;
+  display: block;
+  width: 0;
+}

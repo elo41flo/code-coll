@@ -417,12 +417,15 @@ async function basculerVersFichierServeur(filePath) {
         }
       });
 
+      // Dans script.js -> basculerVersFichierServeur()
+
       const fileState = EditorState.create({
         doc: fileYText.toString(),
         extensions: [
           basicSetup,
           javascript(),
           oneDark,
+          // On transmet le texte Yjs ET l'awareness (qui contient les pseudos/couleurs)
           yCollab(fileYText, provider.awareness),
           updateListener,
           keymap.of([
