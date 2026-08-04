@@ -1,4 +1,4 @@
-/* --- RESET & VARIABLES GOBLALES --- */
+/* --- RESET & VARIABLES GLOBALES --- */
 :root {
   --bg-darker: #1e1e2e;
   --bg-dark: #252538;
@@ -25,13 +25,15 @@
     sans-serif;
 }
 
+html,
 body {
+  height: 100vh;
+  width: 100vw;
   background-color: var(--bg-darker);
   color: var(--text-main);
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden; /* Empeche le scroll de la page entière */
 }
 
 /* --- HEADER / NAVBAR --- */
@@ -43,6 +45,7 @@ header {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
+  flex-shrink: 0; /* Garde la hauteur fixe du header */
 }
 
 .logo-container {
@@ -108,7 +111,7 @@ button {
 .main-container {
   display: flex;
   flex: 1;
-  height: calc(100vh - 55px);
+  min-height: 0; /* TRÈS IMPORTANT : permet aux enfants de scroller */
   overflow: hidden;
 }
 
@@ -120,6 +123,7 @@ button {
   display: flex;
   flex-direction: column;
   padding: 15px;
+  flex-shrink: 0;
 }
 
 .sidebar-header {
@@ -208,29 +212,62 @@ button {
   padding-left: 14px;
 }
 
-/* --- ZONE D'ÉDITION DE CODE --- */
+/* --- COLONNE DROITE : ZONE D'ÉDITION + TERMINAL --- */
 #editor-container {
   flex: 1;
-  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* TRÈS IMPORTANT */
   background-color: var(--bg-darker);
   position: relative;
+  overflow: hidden;
 }
 
-/* Forcer CodeMirror à prendre tout l'espace vertical */
+/* --- ENCADREMENT DU COMPOSANT CODEMIRROR --- */
+#editor {
+  flex: 1;
+  min-height: 0; /* Permet le calcul exact de la hauteur restante */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Forcer CodeMirror et son scroller interne */
 .cm-editor {
   height: 100% !important;
+  display: flex;
+  flex-direction: column;
 }
 
 .cm-scroller {
-  overflow: auto;
+  flex: 1 !important;
+  overflow: auto !important; /* Déclenche la molette et la scrollbar */
   font-family: "Fira Code", "Cascadia Code", Consolas, monospace;
 }
 
-@import "@xterm/xterm/css/xterm.css";
+/* Style de la barre de défilement CodeMirror */
+.cm-scroller::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
 
-/* Panneau inférieur */
+.cm-scroller::-webkit-scrollbar-track {
+  background: #1e1e2e;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb {
+  background: #45475a;
+  border-radius: 5px;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: #585b70;
+}
+
+/* --- PANNEAU INFÉRIEUR (TERMINAL) --- */
 #bottom-panel {
   height: 200px;
+  flex-shrink: 0; /* Conserve ses 200px sans écraser l'éditeur */
   background-color: #11111b;
   border-top: 1px solid var(--border-color);
   display: flex;
@@ -264,7 +301,6 @@ button {
    EXPLORATEUR DE FICHIERS ET PASTILLE
    ========================================== */
 
-/* Structure de chaque ligne de fichier dans l'explorateur */
 .tree-list .tree-file {
   display: flex;
   align-items: center;
@@ -274,7 +310,6 @@ button {
   user-select: none;
 }
 
-/* Pastille d'état (masquée par défaut) */
 .tree-list .tree-file .dirty-badge {
   display: inline-block;
   width: 8px;
@@ -288,13 +323,11 @@ button {
     box-shadow 0.2s ease;
 }
 
-/* Affichage de la pastille dorée lorsque le fichier contient des modifications non enregistrées */
 .tree-list .tree-file.is-dirty .dirty-badge {
   background-color: #f9e2af;
   box-shadow: 0 0 6px rgba(249, 226, 175, 0.8);
 }
 
-/* Surlignage du fichier actuellement ouvert */
 .tree-list .tree-file.active-file {
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
@@ -304,7 +337,6 @@ button {
    ETIQUETTES ET CURSEURS COLLABORATIFS
    ========================================== */
 
-/* Curseur du collaborateur distant */
 .cm-ySelectionCaret {
   position: relative;
   border-left: 2px solid;
@@ -314,7 +346,6 @@ button {
   box-sizing: border-box;
 }
 
-/* Bulle/Étiquette portant le pseudo de l'utilisateur */
 .cm-ySelectionInfo {
   position: absolute;
   top: -1.4em;
@@ -330,44 +361,4 @@ button {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* 1. Limiter la hauteur du conteneur parent de l'éditeur et autoriser le scroll */
-#editor {
-  height: 100%;
-  max-height: calc(
-    100vh - 50px
-  ); /* Ajuste selon la hauteur de ton header/navbar */
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 2. Forcer CodeMirror à prendre toute la hauteur et activer la molette */
-.cm-editor {
-  height: 100% !important;
-}
-
-/* 3. Activer le défilement vertical interne de CodeMirror et afficher la scrollbar */
-.cm-scroller {
-  overflow: auto !important;
-}
-
-/* (Optionnel) Personnaliser la barre de défilement pour la rendre bien visible */
-.cm-scroller::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.cm-scroller::-webkit-scrollbar-track {
-  background: #1e1e2e;
-}
-
-.cm-scroller::-webkit-scrollbar-thumb {
-  background: #45475a;
-  border-radius: 4px;
-}
-
-.cm-scroller::-webkit-scrollbar-thumb:hover {
-  background: #585b70;
 }
