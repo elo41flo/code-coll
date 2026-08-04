@@ -25,7 +25,7 @@ const rawBackendUrl =
   import.meta.env.VITE_BACKEND_URL ||
   `${window.location.protocol}//${window.location.host}`;
 
-// Retirer le slash final éventuel pour éviter des requêtes malformées (ex: //api/files)
+// Retirer le slash final éventuel pour éviter des requêtes malformées
 const BACKEND_URL = rawBackendUrl.replace(/\/+$/, "");
 
 // Conversion automatique du protocole HTTP -> WS et HTTPS -> WSS
@@ -114,7 +114,7 @@ const editorContainer = document.getElementById("editor");
 // Instance initiale de CodeMirror
 const view = new EditorView({
   state: EditorState.create({
-    doc: "// Sélectionnez un fichier dans l'explorateur pour démarrer.",
+    doc: "// Sélectionnez un fichier dans l'explorateur ou ouvrez un dossier perso pour démarrer.",
     extensions: [basicSetup, javascript(), oneDark],
   }),
   parent: editorContainer,
@@ -161,7 +161,7 @@ if (btnShare) {
 }
 
 // ==========================================
-// 6. EXPLORATION DE FICHIERS DEPUIS LE SERVEUR
+// 6. EXPLORATION & UPLOAD DE FICHIERS DEPUIS LE SERVEUR
 // ==========================================
 
 const btnOpenFolder = document.getElementById("btn-open-folder");
@@ -176,21 +176,31 @@ async function chargerArborescenceServeur() {
 
     const treeData = await response.json();
 
-    if (Array.isArray(treeData) && treeData.length > 0) {
-      const treeHTML = construireArbreHTMLBackend(treeData);
-      fileTreeContainer.appendChild(treeHTML);
+    if (fileTreeContainer) {
+      fileTreeContainer.innerHTML = "";
 
-      // --- NOUVEAU : Ouverture automatique du fichier de l'URL pour l'invité ---
-      const urlParams = new URLSearchParams(window.location.search);
-      const fileFromUrl = urlParams.get("file");
+      if (Array.isArray(treeData) && treeData.length > 0) {
+        const treeHTML = construireArbreHTMLBackend(treeData);
+        fileTreeContainer.appendChild(treeHTML);
 
-      if (fileFromUrl) {
-        // Si l'URL contient un fichier, on l'ouvre directement
-        await basculerVersFichierServeur(fileFromUrl);
+        // Déplier visuellement les dossiers
+        document
+          .querySelectorAll("#file-tree details")
+          .forEach((d) => (d.open = true));
+
+        // Ouverture automatique du fichier de l'URL pour l'invité
+        const urlParams = new URLSearchParams(window.location.search);
+        const fileFromUrl = urlParams.get("file");
+
+        if (fileFromUrl) {
+          await basculerVersFichierServeur(fileFromUrl);
+        } else {
+          const firstFile = trouverPremierFichier(treeData);
+          if (firstFile) await basculerVersFichierServeur(firstFile.path);
+        }
       } else {
-        // Sinon on ouvre le 1er fichier disponible (ex: main.js)
-        const firstFile = trouverPremierFichier(treeData);
-        if (firstFile) await basculerVersFichierServeur(firstFile.path);
+        fileTreeContainer.innerHTML =
+          "<div class='tree-empty'>Aucun fichier dans le dossier.</div>";
       }
     }
   } catch (err) {
@@ -202,36 +212,7 @@ async function chargerArborescenceServeur() {
   }
 }
 
-// Gestion de l'ouverture et du chargement lors du clic sur le bouton
-// Utilisation de l'API moderne File System Access du navigateur
-if (btnOpenFolder) {
-  btnOpenFolder.textContent = "📁 Ouvrir un dossier local";
-  btnOpenFolder.addEventListener("click", async () => {
-    try {
-      // 1. Ouvrir la boîte de dialogue native du système (Windows / Mac)
-      const dirHandle = await window.showDirectoryPicker();
-
-      // 2. Ouvrir le panneau latéral s'il existe
-      if (sidebar) {
-        sidebar.classList.add("open", "active");
-      }
-
-      // 3. Lire le contenu du dossier sélectionné
-      if (fileTreeContainer) {
-        fileTreeContainer.innerHTML = "";
-        const treeHTML = await lireDossierLocal(dirHandle);
-        fileTreeContainer.appendChild(treeHTML);
-      }
-    } catch (err) {
-      // Annulation par l'utilisateur ou navigateur non compatible
-      if (err.name !== "AbortError") {
-        console.error("Erreur d'ouverture du dossier local :", err);
-      }
-    }
-  });
-}
-
-// Fonction utilitaire pour récupérer le premier fichier d'un dossier
+// Fonction utilitaire pour récupérer le premier fichier disponible
 function trouverPremierFichier(nodes) {
   for (const node of nodes) {
     if (node.type === "file") return node;
@@ -243,38 +224,118 @@ function trouverPremierFichier(nodes) {
   return null;
 }
 
-// Fonction récursive pour lire un dossier local sélectionné
-async function lireDossierLocal(dirHandle) {
-  const ul = document.createElement("ul");
-  ul.className = "tree-list";
+// Gestion de l'ouverture du dossier local + Téléversement vers le serveur
+if (btnOpenFolder) {
+  btnOpenFolder.textContent = "📁 Ouvrir dossier perso";
+  btnOpenFolder.addEventListener("click", async () => {
+    try {
+      // 1. Sélection du dossier local sur l'ordinateur
+      const dirHandle = await window.showDirectoryPicker();
 
+      btnOpenFolder.textContent = "⏳ Upload en cours...";
+
+      // 2. Envoi récursif au backend Express
+      await uploaderDossierLocal(dirHandle, "");
+
+      btnOpenFolder.textContent = "📁 Ouvrir dossier perso";
+
+      // 3. Ouverture du tiroir latéral
+      if (sidebar) {
+        sidebar.classList.add("open", "active");
+      }
+
+      // 4. Rechargement de l'arborescence depuis le serveur
+      await chargerArborescenceServeur();
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        console.error("Erreur lors de l'upload du dossier :", err);
+        alert("Erreur lors de l'import du dossier.");
+      }
+      btnOpenFolder.textContent = "📁 Ouvrir dossier perso";
+    }
+  });
+}
+
+// Fonction récursive pour lire un dossier local et téléverser chaque fichier sur le backend
+async function uploaderDossierLocal(dirHandle, parentPath = "") {
   for await (const entry of dirHandle.values()) {
-    const li = document.createElement("li");
+    // Exclure les dossiers système / lourds
+    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+
+    const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
 
     if (entry.kind === "file") {
-      li.className = "tree-file";
-      li.innerHTML = `<span class="file-name">📄 ${entry.name}</span>`;
-
-      li.addEventListener("click", async (e) => {
-        e.stopPropagation();
+      try {
         const file = await entry.getFile();
         const content = await file.text();
 
-        // Charger le contenu du fichier local dans CodeMirror
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: content },
+        // Envoi au backend
+        await fetch(`${BACKEND_URL}/api/upload-file`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            path: currentPath,
+            content: content,
+          }),
         });
+      } catch (e) {
+        console.warn(`Fichier ignoré ou non lisible: ${currentPath}`, e);
+      }
+    } else if (entry.kind === "directory") {
+      await uploaderDossierLocal(entry, currentPath);
+    }
+  }
+}
+
+// Construction HTML récursive sécurisée de l'arbre
+function construireArbreHTMLBackend(nodes) {
+  const ul = document.createElement("ul");
+  ul.className = "tree-list";
+
+  if (!Array.isArray(nodes)) return ul;
+
+  nodes.forEach((node) => {
+    const li = document.createElement("li");
+
+    if (node.type === "file") {
+      li.className = "tree-file";
+      li.dataset.filepath = node.path;
+
+      li.innerHTML = `
+        <span class="file-name">📄 ${node.name}</span>
+        <span class="dirty-badge"></span>
+      `;
+
+      if (openFiles.has(node.path) && openFiles.get(node.path).isDirty) {
+        li.classList.add("is-dirty");
+      }
+
+      if (currentFilePath === node.path) {
+        li.classList.add("active-file");
+      }
+
+      li.addEventListener("click", async (e) => {
+        e.stopPropagation();
+
+        document.querySelectorAll(".tree-file").forEach((el) => {
+          el.classList.remove("active-file");
+        });
+        li.classList.add("active-file");
+
+        await basculerVersFichierServeur(node.path);
       });
 
       ul.appendChild(li);
-    } else if (entry.kind === "directory") {
+    } else if (node.type === "directory") {
       const details = document.createElement("details");
       details.open = true;
       const summary = document.createElement("summary");
-      summary.textContent = `📁 ${entry.name}`;
+
+      summary.textContent = `📁 ${node.name}`;
       summary.className = "tree-folder-title";
 
-      const subTree = await lireDossierLocal(entry);
+      const childrenNodes = Array.isArray(node.children) ? node.children : [];
+      const subTree = construireArbreHTMLBackend(childrenNodes);
 
       details.appendChild(summary);
       details.appendChild(subTree);
@@ -282,7 +343,7 @@ async function lireDossierLocal(dirHandle) {
 
       ul.appendChild(li);
     }
-  }
+  });
 
   return ul;
 }
@@ -304,22 +365,29 @@ function mettreAJourPastille(filePath, isDirty) {
   }
 }
 
-// Chargement du contenu du fichier depuis l'API backend
+// Chargement du contenu du fichier depuis l'API backend et mise à jour URL
 async function basculerVersFichierServeur(filePath) {
-  // 1. Sauvegarder l'état du fichier courant
   if (currentFilePath && openFiles.has(currentFilePath)) {
     openFiles.get(currentFilePath).state = view.state;
   }
 
   currentFilePath = filePath;
 
-  // --- NOUVEAU : Enregistrer le fichier actif dans l'URL ---
+  // Enregistrer le fichier actif dans l'URL pour la partage du lien d'invitation
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set("file", filePath);
   const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
   window.history.replaceState(null, "", newUrl);
 
-  // 2. Si première ouverture dans cette session
+  // Mettre à jour l'élément sélectionné visuellement
+  document.querySelectorAll(".tree-file").forEach((el) => {
+    if (el.dataset.filepath === filePath) {
+      el.classList.add("active-file");
+    } else {
+      el.classList.remove("active-file");
+    }
+  });
+
   if (!openFiles.has(filePath)) {
     try {
       const res = await fetch(
@@ -332,7 +400,6 @@ async function basculerVersFichierServeur(filePath) {
 
       const fileYText = ydoc.getText(`file:${filePath}`);
 
-      // Initialisation Yjs si le document partagé est vide
       if (fileYText.toString() === "" && diskContent !== "") {
         ydoc.transact(() => {
           fileYText.insert(0, diskContent);
@@ -382,7 +449,6 @@ async function basculerVersFichierServeur(filePath) {
     }
   }
 
-  // 3. Charger l'état CodeMirror
   const session = openFiles.get(filePath);
   if (session) {
     view.setState(session.state);
@@ -434,6 +500,20 @@ window.addEventListener(
   },
   true,
 );
+
+// Initialisation automatique au chargement de la page
+(async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+
+  // Si c'est un lien partagé (invitation), ouvrir automatiquement le tiroir
+  if (urlParams.has("file") || urlParams.has("room")) {
+    if (sidebar) {
+      sidebar.classList.add("open", "active");
+    }
+  }
+
+  await chargerArborescenceServeur();
+})();
 
 // ==========================================
 // 7. TERMINAL XTERM.JS VIA WEBSOCKET BACKEND
