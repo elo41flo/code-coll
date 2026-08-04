@@ -217,6 +217,9 @@ function construireArbreHTMLBackend(nodes) {
   const ul = document.createElement("ul");
   ul.className = "tree-list";
 
+  // Sécurité si nodes n'est pas un tableau
+  if (!Array.isArray(nodes)) return ul;
+
   nodes.forEach((node) => {
     const li = document.createElement("li");
 
@@ -257,7 +260,9 @@ function construireArbreHTMLBackend(nodes) {
       summary.textContent = `📁 ${node.name}`;
       summary.className = "tree-folder-title";
 
-      const subTree = construireArbreHTMLBackend(node.children || []);
+      // Sécurité : passage d'un tableau vide si node.children est indéfini
+      const childrenNodes = Array.isArray(node.children) ? node.children : [];
+      const subTree = construireArbreHTMLBackend(childrenNodes);
 
       details.appendChild(summary);
       details.appendChild(subTree);
