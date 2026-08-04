@@ -204,23 +204,30 @@ async function chargerArborescenceServeur() {
 
 // Gestion de l'ouverture et du chargement lors du clic sur le bouton
 // Utilisation de l'API moderne File System Access du navigateur
-// Gestion du bouton de l'explorateur (Ouverture sidebar + forçage d'affichage)
 if (btnOpenFolder) {
-  btnOpenFolder.textContent = "📁 Projet serveur";
+  btnOpenFolder.textContent = "📁 Ouvrir un dossier local";
   btnOpenFolder.addEventListener("click", async () => {
-    // 1. Basculer l'affichage du panneau latéral
-    if (sidebar) {
-      sidebar.classList.toggle("open");
-      sidebar.classList.toggle("active");
+    try {
+      // 1. Ouvrir la boîte de dialogue native du système (Windows / Mac)
+      const dirHandle = await window.showDirectoryPicker();
+
+      // 2. Ouvrir le panneau latéral s'il existe
+      if (sidebar) {
+        sidebar.classList.add("open", "active");
+      }
+
+      // 3. Lire le contenu du dossier sélectionné
+      if (fileTreeContainer) {
+        fileTreeContainer.innerHTML = "";
+        const treeHTML = await lireDossierLocal(dirHandle);
+        fileTreeContainer.appendChild(treeHTML);
+      }
+    } catch (err) {
+      // Annulation par l'utilisateur ou navigateur non compatible
+      if (err.name !== "AbortError") {
+        console.error("Erreur d'ouverture du dossier local :", err);
+      }
     }
-
-    // 2. Recharger et afficher l'arborescence
-    await chargerArborescenceServeur();
-
-    // 3. Forcer l'ouverture visuelle de tous les dossiers HTML <details>
-    document.querySelectorAll("#file-tree details").forEach((folder) => {
-      folder.open = true;
-    });
   });
 }
 
