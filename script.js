@@ -196,70 +196,66 @@ async function chargerArborescenceServeur() {
 }
 
 // Gestion de l'ouverture et du chargement lors du clic sur le bouton
+// Utilisation de l'API moderne File System Access du navigateur
 if (btnOpenFolder) {
-  btnOpenFolder.textContent = "📁 Projet serveur";
-  btnOpenFolder.addEventListener("click", () => {
-    // Basculer l'affichage du panneau latéral si la classe existe
-    if (sidebar) {
-      sidebar.classList.toggle("open");
-      sidebar.classList.toggle("active");
+  btnOpenFolder.textContent = "📁 Ouvrir un dossier local";
+  btnOpenFolder.addEventListener("click", async () => {
+    try {
+      // 1. Ouvrir la boîte de dialogue native du système (Windows / Mac)
+      const dirHandle = await window.showDirectoryPicker();
+
+      // 2. Ouvrir le panneau latéral s'il existe
+      if (sidebar) {
+        sidebar.classList.add("open", "active");
+      }
+
+      // 3. Lire le contenu du dossier sélectionné
+      if (fileTreeContainer) {
+        fileTreeContainer.innerHTML = "";
+        const treeHTML = await lireDossierLocal(dirHandle);
+        fileTreeContainer.appendChild(treeHTML);
+      }
+    } catch (err) {
+      // Annulation par l'utilisateur ou navigateur non compatible
+      if (err.name !== "AbortError") {
+        console.error("Erreur d'ouverture du dossier local :", err);
+      }
     }
-    // Recharger l'arborescence
-    chargerArborescenceServeur();
   });
 }
 
-// Chargement automatique au démarrage
-chargerArborescenceServeur();
-
-function construireArbreHTMLBackend(nodes) {
+// Fonction récursive pour lire un dossier local sélectionné
+async function lireDossierLocal(dirHandle) {
   const ul = document.createElement("ul");
   ul.className = "tree-list";
 
-  if (!Array.isArray(nodes)) return ul;
-
-  nodes.forEach((node) => {
+  for await (const entry of dirHandle.values()) {
     const li = document.createElement("li");
 
-    if (node.type === "file") {
+    if (entry.kind === "file") {
       li.className = "tree-file";
-      li.dataset.filepath = node.path;
-
-      li.innerHTML = `
-        <span class="file-name">📄 ${node.name}</span>
-        <span class="dirty-badge"></span>
-      `;
-
-      if (openFiles.has(node.path) && openFiles.get(node.path).isDirty) {
-        li.classList.add("is-dirty");
-      }
-
-      if (currentFilePath === node.path) {
-        li.classList.add("active-file");
-      }
+      li.innerHTML = `<span class="file-name">📄 ${entry.name}</span>`;
 
       li.addEventListener("click", async (e) => {
         e.stopPropagation();
+        const file = await entry.getFile();
+        const content = await file.text();
 
-        document.querySelectorAll(".tree-file").forEach((el) => {
-          el.classList.remove("active-file");
+        // Charger le contenu du fichier local dans CodeMirror
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: content },
         });
-        li.classList.add("active-file");
-
-        await basculerVersFichierServeur(node.path);
       });
 
       ul.appendChild(li);
-    } else if (node.type === "directory") {
+    } else if (entry.kind === "directory") {
       const details = document.createElement("details");
       details.open = true;
       const summary = document.createElement("summary");
-
-      summary.textContent = `📁 ${node.name}`;
+      summary.textContent = `📁 ${entry.name}`;
       summary.className = "tree-folder-title";
 
-      const childrenNodes = Array.isArray(node.children) ? node.children : [];
-      const subTree = construireArbreHTMLBackend(childrenNodes);
+      const subTree = await lireDossierLocal(entry);
 
       details.appendChild(summary);
       details.appendChild(subTree);
@@ -267,7 +263,7 @@ function construireArbreHTMLBackend(nodes) {
 
       ul.appendChild(li);
     }
-  });
+  }
 
   return ul;
 }
