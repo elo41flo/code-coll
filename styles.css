@@ -331,3 +331,43 @@ button {
   pointer-events: none;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
+
+/* 1. Limiter la hauteur du conteneur parent de l'éditeur et autoriser le scroll */
+#editor {
+  height: 100%;
+  max-height: calc(
+    100vh - 50px
+  ); /* Ajuste selon la hauteur de ton header/navbar */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 2. Forcer CodeMirror à prendre toute la hauteur et activer la molette */
+.cm-editor {
+  height: 100% !important;
+}
+
+/* 3. Activer le défilement vertical interne de CodeMirror et afficher la scrollbar */
+.cm-scroller {
+  overflow: auto !important;
+}
+
+/* (Optionnel) Personnaliser la barre de défilement pour la rendre bien visible */
+.cm-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cm-scroller::-webkit-scrollbar-track {
+  background: #1e1e2e;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb {
+  background: #45475a;
+  border-radius: 4px;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: #585b70;
+}
